@@ -1,4 +1,3 @@
-//#define DEBUG
 #include <A6lib.h>
 #include <OneWire.h>
 #include <DallasTemperature.h>
@@ -22,16 +21,13 @@ DeviceAddress deviceAddress[DEVICE_COUNT]  = {
 };
 float hourlyTemperature[DEVICE_COUNT][24];
 const String deviceName[DEVICE_COUNT] = {"\nSensor 10m", "\nSensor  1m"};
-const String comrade[USERS_COUNT] = {"9219258698", "9214201935", "9213303129"};
+const String comrade[USERS_COUNT] = {"91112223333", "91112224444", "91112225555"};
 unsigned long checkTime, measureTime;
 
 void setup(void)
 {
-  //Serial.begin(9600);
-  //Serial.println("=== init modem start ===");
   delay(5000);
   A6l.blockUntilReady(28800);
-  //Serial.println("=== done ===");
   
   sensors.begin();
   for (int i = 0; i < DEVICE_COUNT; i++) {
@@ -58,6 +54,7 @@ void loop(void)
   if (millis() >= checkTime) {
     callInfo cinfo = A6l.checkCallStatus();
     if (cinfo.direction == DIR_INCOMING) {
+      // звонят, сверимся со списком телефонных номеров
       bool allow = false;
       String phone = "+7";
       for (int i = 0; i < USERS_COUNT; i++ ) {
@@ -92,6 +89,7 @@ void loop(void)
       }
     }
     if (millis() >= measureTime) {
+      // храним почасовые замеры за последние сутки
       measureTime = millis() + HOUR;
       sensors.requestTemperatures();
       for (int s = 0; s < DEVICE_COUNT; s++) {
