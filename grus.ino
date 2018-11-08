@@ -31,7 +31,7 @@ uint8_t deviceAddress[DEVICE_COUNT][8]  = {
 int16_t currentTemperature[DEVICE_COUNT];
 int16_t hourlyTemperature[DEVICE_COUNT][24];
 const String deviceName[DEVICE_COUNT] = {"#1/0m ", "#2/15m ", "#3/5m "};
-const String comrade[USERS_COUNT] = {"9219258698", "9214201935", "9213303129"};
+const String comrade[USERS_COUNT] = {"98887776543", "98887776542", "98887776541"};
 bool pwrled = true;
 unsigned long checkTime, measureTime;
 
