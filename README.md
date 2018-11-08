@@ -1,3 +1,3 @@
 # Термометр Журавли (grus)
 
-![Scheme](https://github.com/sshspb/grus/images/scheme1.jpg)
+![Scheme](https://github.com/sshspb/grus/tree/master/images/scheme1.jpg)
