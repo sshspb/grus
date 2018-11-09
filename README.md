@@ -52,8 +52,8 @@ https://www.pjrc.com/teensy/td_libs_OneWire.html
 
 ![interior installation](images/grus3.jpg)
 
-Питание каждой из плат, Arduino и A6 GSM/GPRS, осуществляется от адаптера AC/DC ~220V/=12V 1А
-https://ru.aliexpress.com/item/DC-12/32893669453.html с последующим понижением напряжения питания до 8 вольт для Arduino и до 6 вольт для A6 GSM/GPRS стабилизаторами напряжения L7806CV и L7808CV соответственно.
+Питание каждой из плат, и Arduino и A6 GSM/GPRS, осуществляется от адаптера AC/DC ~220V/=12V 1А
+https://ru.aliexpress.com/item/DC-12/32893669453.html с последующим понижением напряжения питания до 8 вольт для Arduino и до 6 вольт для A6 GSM/GPRS стабилизаторами напряжения L7808CV и L7806CV соответственно.
 
 ## Подсоединение датчиков
 
