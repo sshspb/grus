@@ -54,6 +54,13 @@ https://www.pjrc.com/teensy/td_libs_OneWire.html и LCDi2cW https://github.com/j
 
 ![interior installation](images/grus4.jpg)
 
+### Подключение дисплея к плате ардуино
+
+Вывод GND - провод зелёного цвета - подключается к GND на плате.
+Вывод SCL - провод жёлтого цвета - подключается к пину A5 платы.
+Вывод SDA - провод синего цвета - подключается к пину A4 платы.
+Вывод VCC – провод белого цвета - подключается к 5V платы
+
 ![interior installation](images/grus3.jpg)
 
 Питание каждой из плат, и Arduino и A6 GSM/GPRS, осуществляется от адаптера AC/DC ~220V/=12V 1А
