@@ -7,35 +7,29 @@
 #define TX_UNO 8
 #define PWR_KEY_UNO 11
 #define PWR_LED_UNO 12
-#define CALL_CHECK_INTERVAL 2000L
 #define REPORT_INTERVAL 10000L
-#define HOUR 3600000L
-#define MODEM_RATE 9600L
+#define MEASURE_INTERVAL 3600000L
 #define DEVICE_COUNT 3
 #define USERS_COUNT 3
-
 #define GSM_OK 0
-#define GSM_SMS 1
-#define GSM_NL "\r\n"
+#define GSM_SM 1
+#define GSM_CR '\r'
+//#define GSM_CR "\r\n"
 #define CTRL_Z '\x1A'
 
-#define SCRATCHPAD_TEMP_LSB 0
-#define SCRATCHPAD_TEMP_MSB 1
-#define SCRATCHPAD_CRC 8
-
-byte deviceAddress[DEVICE_COUNT][8]  = {
+const char* comrade[USERS_COUNT] = {"+79219258698", "+79214201935", "+79213303129"};
+const byte deviceAddress[DEVICE_COUNT][8]  = {
   { 0x28, 0x6C, 0x8F, 0x53, 0x03, 0x00, 0x00, 0xB0 }, // #1/00m Sensor  0m grey hub
   { 0x28, 0xF9, 0xCD, 0x53, 0x03, 0x00, 0x00, 0x80 }, // #2/15m Sensor 15m white hub
   { 0x28, 0x27, 0x84, 0x53, 0x03, 0x00, 0x00, 0x4D }  // #3/05m Sensor  5m
 };
+const int temp_null = 1598;  // (int) 99,9 * 16
 int currentTemperature[DEVICE_COUNT];
 int hourlyTemperature[DEVICE_COUNT][24];
-const String comrade[USERS_COUNT] = {"9219258698", "9214201935", "9213303129"};
-const int temp_null = 1598;  // (int) 99,9 * 16
-bool pwrled = true;
-unsigned long checkTime, reportTime, measureTime;
-byte i, s, t;
-String answer = "";
+unsigned long reportTime, measureTime, timeout;
+byte i, j, s, t;
+char buff[32];
+char answer[128];
 
 SoftwareSerial modem(RX_UNO, TX_UNO);
 OneWire ds(ONE_WIRE_UNO);
@@ -55,36 +49,40 @@ void getTemp() {
       for (i = 0; i < 9; i++) {
        scratchPad[i] = ds.read();
       }
-      if (ds.crc8(scratchPad, 8) == scratchPad[SCRATCHPAD_CRC]) {
-        currentTemperature[s] = (scratchPad[SCRATCHPAD_TEMP_MSB] << 8) | scratchPad[SCRATCHPAD_TEMP_LSB];
+      if (ds.crc8(scratchPad, 8) == scratchPad[8]) {
+        currentTemperature[s] = (scratchPad[1] << 8) | scratchPad[0];
       } 
     } 
   }
 
-  long finish = millis() + 1000L;
-  String csq = "";
-  modem.print("AT+CSQ");
-  modem.write(GSM_NL);
+  modem.write("AT+CSQ"); 
+  modem.write(GSM_CR);
+  buff[0] = answer[0] = '\0';
+  timeout = millis() + 1000L;
   do {
     if (modem.available()) {
-      char str[32];
-      str[0] = '\0';
-      byte len = modem.readBytesUntil('\n', str, 32);
-      if (len > 1 && str[0] == '+') {
-        str[len-1] = '\0'; // на позиции len-1 символ CR, '\r'
-        csq = String(str);
-        csq = "SIGNAL QUALITY" + csq.substring(4, csq.indexOf(',')); 
+      byte len = modem.readBytesUntil('\n', buff, 32);
+      if (len > 8 && buff[0] == '+' && buff[1] == 'C' && buff[2] == 'S' && buff[3] == 'Q') {
         break;
+      } else {
+        buff[0] = '\0';
       }
-    } else {
-      delay(100);
     }
-  } while (millis() < finish);
-  
-  answer = csq + '\n';
+  } while (millis() < timeout);
   lcd.clear();
   lcd.setCursor(0,0);
-  lcd.print(csq.c_str());
+  if (buff[0] == '\0') {
+    const char* fail = "SIGNAL FAIL";
+    lcd.printstr(fail);
+    sprintf(answer, "%s", fail);
+  } else {
+    char csq[3] = {buff[6], buff[7], '\0'};
+    sprintf(buff, "SIGNAL QUALITY: %s", csq);
+    lcd.printstr(buff);
+    sprintf(answer, "%s", buff);
+  }
+
+  i = 1;
   for (s = 0; s < DEVICE_COUNT; s++) {
     if (currentTemperature[s] != temp_null) {
       // минимальная за сутки температура по датчику
@@ -94,150 +92,141 @@ void getTemp() {
           tmin = hourlyTemperature[s][t];
         }
       }
-      String row = String(s+1)+": "+String((float) currentTemperature[s]/16, 1)+", min "+String((float) tmin/16, 1);
-      answer += row + "\n";
-      if (s < 4) {
-        lcd.setCursor(s+1,0);
-        lcd.print(row.c_str());
+      sprintf(buff, "%d: %3d,  min %3d", s+1, (int) floor(currentTemperature[s]/16), (int) floor(tmin/16) );
+      sprintf(answer, "%s\n%s", answer, buff);
+      if (i < 4) {
+        lcd.setCursor(i++,0);
+        lcd.printstr(buff);
       }
     }
   }
 }
 
-bool isResponseModem (unsigned long timeout = 5000L, byte mode = GSM_OK) {
-  unsigned long finish =  millis() + timeout;
-  bool resOK = false;
-  do {
-    if (modem.available()) {
-      char str[32];
-      byte len = modem.readBytesUntil('\n', str, 32);
-      if (len > 1) {
-        switch (mode) {
-          case GSM_OK:
-            resOK = (str[0] == 'O' && str[1] == 'K');
-            break;
-          case GSM_SMS:
-            resOK = (str[0] == '>');
-            break;
-          default:
-            resOK = false;
-        }
-      }
-    } else {
-      delay(100);
-    }
-  } while (!resOK && millis() < finish);
-  return resOK;
-}
-
-bool performModem(String command = "AT") {
+bool performModem(const char* command, byte mode, byte retry) {
   // выдача модему команды и контроль её исполнения
-  lcd.setCursor(0,19);
-  for (i = 0; i < 3; i++) {
-    modem.print(command);
-    modem.write(GSM_NL);
-    if ( isResponseModem() ) {
-      lcd.print("Y");
+  bool resOK = false;
+  timeout = millis() + 10000L; 
+  for (i = 0; i < retry; i++) {
+    lcd.setCursor(1,0);
+    lcd.write(char(49+i));
+    modem.write(command); 
+    modem.write(GSM_CR);
+    do {
+      if (modem.available()) {
+        byte len = modem.readBytesUntil('\n', buff, 32);
+        if (len > 1) {
+          switch (mode) {
+            case GSM_OK:
+              resOK = (buff[0] == 'O' && buff[1] == 'K');
+              break;
+            case GSM_SM:
+              resOK = (buff[0] == '>');
+              break;
+            default:
+              resOK = false;
+          }
+        }
+      } else {
+        delay(10);
+      }
+    } while (!resOK && millis() < timeout);
+    if (resOK) {
       return true;
     }
   }
-  lcd.print("N");
   return false;
 }
 
-long sampleModem(long rate = MODEM_RATE) {
-  // попытка связаться с модемом на скорости rate 
-  lcd.clear();
-  delay(100); 
+void beginModem(long rate) {
+  lcd.clear(); 
   lcd.setCursor(0,0);
-  lcd.print("sampleModem " + String(rate));
+  sprintf(buff, "sampleModem %ld", rate);
+  lcd.printstr(buff);
   modem.begin(rate);
-  return performModem() ? rate : 0L;
-}
-
-long selectRate() {
-  // перебор скоростей 
-  long rateModem = 0;
-  //long rates[] = { 115200L, 57600L, 38400L, 19200L, 9600L, 14400L, 28800L };
-  long rates[] = { 9600L, 9600L};
-  for (i = 0; i < sizeof(rates)/sizeof(rates[0]); i++) {
-    if (sampleModem(rates[i])) {
-      rateModem = rates[i];
-      break;
-    }
-  }
-  return rateModem;
 }
 
 void connectModem() {
-  // обеспечить связь с модемом на скорости MODEM_RATE
-  long rateModem = 0;
-  // постоянным свечением PWR_LED обозначим режим инициализации связи с модемом
   digitalWrite(PWR_LED_UNO, HIGH);
-  // время для инициализации модема
   delay(10000); 
-  do { 
-    // пока на установится связь с модемом на скорости MODEM_RATE
-    i = 0;
-    while (!rateModem && i < 3) {
-      i++;
-      rateModem = sampleModem();
-      delay(1000); 
-    }
-    if (!rateModem) {
-      // попытка на скорости MODEM_RATE неудачна
-      do {
-        // попытаемся связаться на разных скоростей
-        rateModem = selectRate();
-      } while (!rateModem);
-      if (rateModem != MODEM_RATE) {
-        // командуем модему работать на штатной скорости MODEM_RATE
-        performModem(String("AT&F")); 
-        performModem(String("AT+IPR=") + String(MODEM_RATE)); 
-        performModem("AT&W");
+  while (true) { 
+    // обеспечить связь с модемом на скорости 9600
+    beginModem(9600L);
+    if (performModem("AT", GSM_OK, 5)) {
+      break;
+    } else {
+      // на 9600 не вышло, пробуем другие
+      bool responseModem = false;
+      while (!responseModem) {
+        long rates[7] = { 115200L, 57600L, 38400L, 19200L, 9600L, 14400L, 28800L };
+        for (i = 0; i < 7; i++) {
+          beginModem(rates[i]);
+          responseModem = performModem("AT", GSM_OK, 1);
+          if (responseModem) {
+            performModem("AT&F", GSM_OK, 1); // Set all current parameters to manufacturer defaults
+            performModem("AT+IPR=9600", GSM_OK, 1); // Set fixed local rate
+            performModem("AT&W", GSM_OK, 1); // Stores current configuration to user defined profile
+            break;
+          }
+        }
       }
     }
-  } while (rateModem != MODEM_RATE);
-  //modem.print("AT&F"); modem.print(GSM_NL); isResponseModem(); // Set all current parameters to manufacturer defaults
-  //modem.print("ATZ"); modem.print(GSM_NL); isResponseModem(); // Set all current parameters to user defined profile 
-  //modem.print("AT+IPR=" + String(9600L)); modem.print(GSM_NL); isResponseModem(); // Set fixed local rate
-  //modem.print("ATE0"); modem.print(GSM_NL); isResponseModem(); // Echo mode off 
-  modem.print("AT+CLIP=1"); modem.print(GSM_NL); isResponseModem(); // Set caller ID on
-  modem.print("AT+CMGF=1"); modem.print(GSM_NL); isResponseModem(); // Set SMS to text mode
-  modem.print("AT+CSCS=GSM"); modem.print(GSM_NL); isResponseModem(); //  Character set of the mobile equipment
-  //modem.print("AT&W"); modem.print(GSM_NL); isResponseModem(); // Stores current configuration to user defined profile
+  }
+  //performModem("AT&F", GSM_OK, 1);      // Set all current parameters to manufacturer defaults
+  //performModem("ATZ", GSM_OK, 1);       // Set all current parameters to user defined profile 
+  //performModem("AT+IPR=9600", GSM_OK, 1); // Set fixed local rate
+  performModem("ATE0", GSM_OK, 1);        // Echo mode off 
+  performModem("AT+CLIP=1", GSM_OK, 1);   // Set caller ID on
+  performModem("AT+CMGF=1", GSM_OK, 1);   // Set SMS to text mode
+  performModem("AT+CSCS=GSM", GSM_OK, 1); //  Character set of the mobile equipment
+  //performModem("AT&W", GSM_OK, 1);      // Stores current configuration to user defined profile
 }
 
-String isCall() {
+void isCall() {
   // при входящем вызове модем выдает периодически, где то пару раз в секунду, строки
   // RING
   // после первой строки RING модем выдаст однократно строку типа 
   // +CLIP: "7XXXXXXXXXX",145,"",,"",0 
   // а если послать запрос AT+CLCC то модем выдаст строку типа
   // +CLCC: 1,1,4,0,0,"7XXXXXXXXXX",145
-  long finish = millis() + 1000L;
-  String number = "";
+  timeout = millis() + 1000L; 
+  char eol = '\0';
+  char* number = &eol;
+  char buf[64];
+  byte len; 
+  bool allow;
   do {
     if (modem.available()) {
-      char str[32];
-      str[0] = '\0';
-      byte len = modem.readBytesUntil('\n', str, 32);
-      if (len > 1) {
-        str[len-1] = '\0'; // на позиции len-1 символ CR, '\r'
-        String ring = String(str);
-        int clip = ring.indexOf("CLIP");
-        if (clip >= 0) {
-          byte indexFrom = ring.indexOf(String('\"')) + 1;         //  8, если CLIP
-          byte indexTill = ring.indexOf(String('\"'), indexFrom);  // 19, если CLIP
-          number = ring.substring(indexFrom, indexTill); 
-          break;
-        }
+      len = modem.readBytesUntil('\n', buff, 64);
+      if (len > 19 && buff[1] == 'C' && buff[2] == 'L' && buff[3] == 'I' && buff[4] == 'P') {
+        buff[19] = '\0';
+        number = &buff[8];
+        break;
       }
     } else {
-      delay(100);
+      delay(10);
     }
-  } while (millis() < finish);
-  return number;
+  } while (millis() < timeout);
+
+  if (number[0] != '\0') {
+    delay(3000);
+    modem.write("ATH"); 
+    modem.write(GSM_CR);
+    for (i = 0; i < USERS_COUNT; i++ ) {
+      allow = true;
+      for (j = 1; j < 11; j++) {
+        allow = allow && number[j] == comrade[i][j+1];
+      }
+      if (allow) {
+        sprintf(buff, "AT+CMGS=\"%s\"", comrade[i]);
+        if (performModem(buff, GSM_SM, 1)) {
+          modem.write(answer); 
+          modem.write(CTRL_Z); 
+          delay(9000);
+        }
+        break;
+      }
+    }
+  }
 }
 
 // ==================== main =======================
@@ -247,7 +236,7 @@ void setup(void)
   delay(1000);
   lcd.init(); // Init the display, clears the display
   lcd.setCursor(0,0);
-  lcd.print("Hello World!");
+  lcd.printstr("Hello World!");
   // сброс в null значений температуры по датчикам за последние 24 часа
   for (s = 0; s < DEVICE_COUNT; s++) {
     for (t = 0; t < 24; t++) {
@@ -260,72 +249,40 @@ void setup(void)
   // ждём включения тумблера PWR по INPUT_PULLUP pin PWR_KEY_UNO значения LOW
   pinMode(PWR_KEY_UNO, INPUT_PULLUP);
   while (digitalRead(PWR_KEY_UNO)) {
-    delay(200);
+    delay(100);
   }
   connectModem();
   getTemp();
   reportTime = millis() + REPORT_INTERVAL;
-  checkTime = millis() + CALL_CHECK_INTERVAL;
-  measureTime = millis() + HOUR;
+  measureTime = millis() + MEASURE_INTERVAL;
 }
 
 void loop(void)
 { 
-  if (millis() + HOUR < checkTime) {
+  if (millis() + MEASURE_INTERVAL + MEASURE_INTERVAL < measureTime) {
     // в arduino счётчик миллисекунд millis() через 50 суток со старта сбрасывается в ноль
-    checkTime = millis() + CALL_CHECK_INTERVAL;
-    measureTime = millis() + HOUR;
+    reportTime = millis() + REPORT_INTERVAL;
+    measureTime = millis() + MEASURE_INTERVAL;
   }
-  if (millis() >= reportTime) {
+
+  if (millis() > reportTime) {
     getTemp();
     reportTime = millis() + REPORT_INTERVAL;
   }
-  if (!digitalRead(PWR_KEY_UNO)) {
-    digitalWrite(PWR_LED_UNO, HIGH);
-  }
-  String number = isCall(); // timeout = 1000L
+
+  if (!digitalRead(PWR_KEY_UNO)) digitalWrite(PWR_LED_UNO, HIGH);
+  isCall(); // timeout 1000L
   digitalWrite(PWR_LED_UNO, LOW);
-  if (number.length()) {
-    // звонят, сверимся со списком телефонных номеров
-    bool allow = false;
-    String phone = "+7";
-    for (i = 0; i < USERS_COUNT; i++ ) {
-      if (number.endsWith(comrade[i])) {
-        phone += comrade[i];
-        allow = true;
-        break;
+
+  if (millis() > measureTime) {
+    if (!performModem("AT", GSM_OK, 1)) connectModem(); // проверка связи с модемом
+    // почасовые замеры за последние сутки
+    for (s = 0; s < DEVICE_COUNT; s++) {
+      for (t = 23; t > 0; t--) {
+        hourlyTemperature[s][t] = hourlyTemperature[s][t-1];
       }
-    }
-    delay(3000);
-    // вешаем трубку
-    modem.print("ATH"); modem.print(GSM_NL); isResponseModem(); 
-    if (allow) {
-      // Если есть допуск высылаем SMS-отчёт 
-      delay(100);
-      char command[64];
-      sprintf(command, "AT+CMGS=\"%s\"", phone.c_str());
-      modem.write(command); modem.write(GSM_NL); isResponseModem(500L, GSM_SMS);
-      modem.write(answer.c_str()); modem.write(GSM_NL);
-      modem.write(CTRL_Z); modem.write(GSM_NL);
-      modem.write(GSM_NL);
-    }
-  }
-  if (millis() >= checkTime) {
-    // проверка связи с модемом
-    if (!performModem()) {
-      // модем не отвечает, надо обеспечить соединение
-      connectModem();
-    }
-    if (millis() >= measureTime) {
-      // почасовые замеры за последние сутки
-      for (s = 0; s < DEVICE_COUNT; s++) {
-        for (t = 23; t > 0; t--) {
-          hourlyTemperature[s][t] = hourlyTemperature[s][t-1];
-        }
-        hourlyTemperature[s][0] = currentTemperature[s];
-      }
-      measureTime = millis() + HOUR;
-    }
-    checkTime = millis() + CALL_CHECK_INTERVAL;
+      hourlyTemperature[s][0] = currentTemperature[s];
+     }
+    measureTime = millis() + MEASURE_INTERVAL;
   }
 }
