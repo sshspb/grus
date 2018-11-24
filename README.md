@@ -7,11 +7,7 @@
 При написания кода для Arduino воспользуемся библиотеками OneWire 
 https://www.pjrc.com/teensy/td_libs_OneWire.html и LCDi2cW https://github.com/javastraat/arduino/tree/master/libraries/LCDi2cW 
 
-Программа grus.ino использует 11 килобайт Flash Memory и 1 килобайт SRAM.
-
-> Скетч использует 10238 байт (31%) памяти устройства.
-
-> Глобальные переменные используют 953 байт (46%) динамической памяти.
+Программа grus.ino использует 10 килобайт Flash Memory и 1 килобайт SRAM.
 
 ## Схема электрическая принципиальная
 

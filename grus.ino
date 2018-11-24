@@ -14,7 +14,6 @@
 #define GSM_OK 0
 #define GSM_SM 1
 #define GSM_CR '\r'
-//#define GSM_CR "\r\n"
 #define CTRL_Z '\x1A'
 
 const char* comrade[USERS_COUNT] = {"+79219258698", "+79214201935", "+79213303129"};
@@ -27,7 +26,6 @@ const int temp_null = 1598;  // (int) 99,9 * 16
 int currentTemperature[DEVICE_COUNT];
 int hourlyTemperature[DEVICE_COUNT][24];
 unsigned long reportTime, measureTime, timeout;
-byte i, j, s, t;
 char buff[32];
 char answer[128];
 
@@ -40,13 +38,13 @@ void getTemp() {
   ds.write(0xCC); // Command Skip ROM to address all devices
 	ds.write(0x44); // Command Convert T, Initiates temperature conversion
   delay(1000);    // maybe 750ms is enough, maybe not
-  for (s = 0; s < DEVICE_COUNT; s++) {
+  for (byte s = 0; s < DEVICE_COUNT; s++) {
     currentTemperature[s] = temp_null;  // 99,9 * 16
    	if (ds.reset()) {  // Initialization
       ds.select(deviceAddress[s]); // Select a device based on its address
       ds.write(0xBE);  // Read Scratchpad, temperature: byte 0: LSB, byte 1: MSB
       byte scratchPad[9] = { 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 , 0x00 };
-      for (i = 0; i < 9; i++) {
+      for (byte i = 0; i < 9; i++) {
        scratchPad[i] = ds.read();
       }
       if (ds.crc8(scratchPad, 8) == scratchPad[8]) {
@@ -73,30 +71,30 @@ void getTemp() {
   lcd.setCursor(0,0);
   if (buff[0] == '\0') {
     const char* fail = "SIGNAL FAIL";
-    lcd.printstr(fail);
+    lcd.print(fail);
     sprintf(answer, "%s", fail);
   } else {
     char csq[3] = {buff[6], buff[7], '\0'};
     sprintf(buff, "SIGNAL QUALITY: %s", csq);
-    lcd.printstr(buff);
+    lcd.print(buff);
     sprintf(answer, "%s", buff);
   }
 
-  i = 1;
-  for (s = 0; s < DEVICE_COUNT; s++) {
+  byte row = 1;
+  for (byte s = 0; s < DEVICE_COUNT; s++) {
     if (currentTemperature[s] != temp_null) {
       // минимальная за сутки температура по датчику
       int tmin = currentTemperature[s];
-      for (t = 0; t < 24; t++) {
+      for (byte t = 0; t < 24; t++) {
         if (hourlyTemperature[s][t] < tmin) {
           tmin = hourlyTemperature[s][t];
         }
       }
       sprintf(buff, "%d: %3d,  min %3d", s+1, (int) floor(currentTemperature[s]/16), (int) floor(tmin/16) );
       sprintf(answer, "%s\n%s", answer, buff);
-      if (i < 4) {
-        lcd.setCursor(i++,0);
-        lcd.printstr(buff);
+      if (row < 4) {
+        lcd.setCursor(row++,0);
+        lcd.print(buff);
       }
     }
   }
@@ -105,12 +103,12 @@ void getTemp() {
 bool performModem(const char* command, byte mode, byte retry) {
   // выдача модему команды и контроль её исполнения
   bool resOK = false;
-  timeout = millis() + 10000L; 
-  for (i = 0; i < retry; i++) {
+  for (byte i = 0; i < retry; i++) {
     lcd.setCursor(1,0);
-    lcd.write(char(49+i));
+    lcd.print(char(49+i));
     modem.write(command); 
     modem.write(GSM_CR);
+    timeout = millis() + 2000L; 
     do {
       if (modem.available()) {
         byte len = modem.readBytesUntil('\n', buff, 32);
@@ -126,14 +124,12 @@ bool performModem(const char* command, byte mode, byte retry) {
               resOK = false;
           }
         }
-      } else {
-        delay(10);
+        if (resOK) {
+          return true;
+        }
       }
-    } while (!resOK && millis() < timeout);
-    if (resOK) {
-      return true;
-    }
-  }
+    } while (millis() < timeout);
+  }   
   return false;
 }
 
@@ -141,7 +137,8 @@ void beginModem(long rate) {
   lcd.clear(); 
   lcd.setCursor(0,0);
   sprintf(buff, "sampleModem %ld", rate);
-  lcd.printstr(buff);
+  lcd.print(buff);
+//  Serial.println(buff);
   modem.begin(rate);
 }
 
@@ -158,9 +155,12 @@ void connectModem() {
       bool responseModem = false;
       while (!responseModem) {
         long rates[7] = { 115200L, 57600L, 38400L, 19200L, 9600L, 14400L, 28800L };
-        for (i = 0; i < 7; i++) {
+        for (byte i = 0; i < 7; i++) {
           beginModem(rates[i]);
           responseModem = performModem("AT", GSM_OK, 1);
+          if (!responseModem) responseModem = performModem("AT", GSM_OK, 1);
+          if (!responseModem) responseModem = performModem("AT", GSM_OK, 1);
+          if (!responseModem) responseModem = performModem("AT", GSM_OK, 1);
           if (responseModem) {
             performModem("AT&F", GSM_OK, 1); // Set all current parameters to manufacturer defaults
             performModem("AT+IPR=9600", GSM_OK, 1); // Set fixed local rate
@@ -173,12 +173,12 @@ void connectModem() {
   }
   //performModem("AT&F", GSM_OK, 1);      // Set all current parameters to manufacturer defaults
   //performModem("ATZ", GSM_OK, 1);       // Set all current parameters to user defined profile 
-  //performModem("AT+IPR=9600", GSM_OK, 1); // Set fixed local rate
   performModem("ATE0", GSM_OK, 1);        // Echo mode off 
   performModem("AT+CLIP=1", GSM_OK, 1);   // Set caller ID on
   performModem("AT+CMGF=1", GSM_OK, 1);   // Set SMS to text mode
   performModem("AT+CSCS=GSM", GSM_OK, 1); //  Character set of the mobile equipment
-  //performModem("AT&W", GSM_OK, 1);      // Stores current configuration to user defined profile
+  performModem("AT+IPR=9600", GSM_OK, 1); // Set fixed local rate
+  performModem("AT&W", GSM_OK, 1);      // Stores current configuration to user defined profile
 }
 
 void isCall() {
@@ -211,9 +211,9 @@ void isCall() {
     delay(3000);
     modem.write("ATH"); 
     modem.write(GSM_CR);
-    for (i = 0; i < USERS_COUNT; i++ ) {
+    for (byte i = 0; i < USERS_COUNT; i++ ) {
       allow = true;
-      for (j = 1; j < 11; j++) {
+      for (byte j = 1; j < 11; j++) {
         allow = allow && number[j] == comrade[i][j+1];
       }
       if (allow) {
@@ -233,13 +233,14 @@ void isCall() {
 
 void setup(void)
 {
+//  Serial.begin(9600);
   delay(1000);
   lcd.init(); // Init the display, clears the display
   lcd.setCursor(0,0);
-  lcd.printstr("Hello World!");
+  lcd.print("Hello World!");
   // сброс в null значений температуры по датчикам за последние 24 часа
-  for (s = 0; s < DEVICE_COUNT; s++) {
-    for (t = 0; t < 24; t++) {
+  for (byte s = 0; s < DEVICE_COUNT; s++) {
+    for (byte t = 0; t < 24; t++) {
       hourlyTemperature[s][t] = temp_null; // 99,9 * 2^4
     }
   }
@@ -277,8 +278,8 @@ void loop(void)
   if (millis() > measureTime) {
     if (!performModem("AT", GSM_OK, 1)) connectModem(); // проверка связи с модемом
     // почасовые замеры за последние сутки
-    for (s = 0; s < DEVICE_COUNT; s++) {
-      for (t = 23; t > 0; t--) {
+    for (byte s = 0; s < DEVICE_COUNT; s++) {
+      for (byte t = 23; t > 0; t--) {
         hourlyTemperature[s][t] = hourlyTemperature[s][t-1];
       }
       hourlyTemperature[s][0] = currentTemperature[s];
