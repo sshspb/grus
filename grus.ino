@@ -17,7 +17,7 @@
 #define DEVICE_COUNT 4
 #define USERS_COUNT 3
 
-const char* comrade[USERS_COUNT] = {"+79219258698", "+79214201935", "+79213303129"};
+const char* comrade[USERS_COUNT] = {"+79876543210", "+79876543210", "+79876543210"};
 const byte deviceAddress[DEVICE_COUNT][8]  = {
   { 0x28, 0x6C, 0x8F, 0x53, 0x03, 0x00, 0x00, 0xB0 }, // #1 Sensor  0m grey hub
   { 0x28, 0xF9, 0xCD, 0x53, 0x03, 0x00, 0x00, 0x80 }, // #2 Sensor 15m white hub
