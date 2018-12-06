@@ -22,7 +22,7 @@
 #define MODEM_RATE 115200L
 //#define MODEM_RATE 9600L
 
-const char* comrade[USERS_COUNT] = {"+7XXXXXXXXXX", "+7XXXXXXXXXX", "+7XXXXXXXXXX"};
+const char* comrade[USERS_COUNT] = {"+79219258698", "+79214201935", "+79213303129"};
 const byte deviceAddress[DEVICE_COUNT][8]  = {
   { 0x28, 0x6C, 0x8F, 0x53, 0x03, 0x00, 0x00, 0xB0 }, // #1 Sensor  0m grey hub
   { 0x28, 0xF9, 0xCD, 0x53, 0x03, 0x00, 0x00, 0x80 }, // #2 Sensor 15m white hub
@@ -246,16 +246,17 @@ void isCall() {
   } while (millis() < timeout);
 
   if (number[0] != '\0') {
-    delay(3000);
-    Serial.write("ATH"); 
-    Serial.write(GSM_CR); 
-    delay(3000);
+    delay(4000);
+    //Serial.write("ATH"); 
+    //Serial.write(GSM_CR); 
+    performModem("ATH", GSM_OK, 1, 1);
     for (byte i = 0; i < USERS_COUNT; i++ ) {
       allow = true;
       for (byte j = 1; j < 11; j++) {
         allow = allow && number[j] == comrade[i][j+1];
       }
       if (allow) {
+        delay(4000);
         sprintf(buff, "AT+CMGS=\"%s\"", comrade[i]);
         if (performModem(buff, GSM_SM, 1, 1)) {
           for (byte i = 0; i <= connected; i++ ) {
@@ -339,7 +340,7 @@ void loop(void) {
   }
 
   if (millis() > messageTime) {
-    if (performModem("AT+CMGS=\"+7XXXXXXXXXX\"", GSM_SM, 1, 1)) {
+    if (performModem("AT+CMGS=\"+79219258698\"", GSM_SM, 1, 1)) {
       for (byte i = 0; i <= connected; i++ ) {
         Serial.write(answer[i]); 
       }
