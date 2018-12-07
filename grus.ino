@@ -14,10 +14,10 @@
 #define REPORT_INTERVAL 60000L
 #define MEASURE_INTERVAL 3600000L
 #define DEVICE_COUNT 4
-#define USERS_COUNT 3
+#define USERS_COUNT 5
 #define MODEM_RATE 115200L
 
-const char* comrade[USERS_COUNT] = {"+7XXXXXXXXXX", "+7XXXXXXXXXX", "+7XXXXXXXXXX"};
+const char* comrade[USERS_COUNT] = {"+7XXXXXXXXXX", "+7XXXXXXXXXX", "+7XXXXXXXXXX", "+7XXXXXXXXXX", "+7XXXXXXXXXX"};
 const byte deviceAddress[DEVICE_COUNT][8]  = {
   { 0x28, 0x6C, 0x8F, 0x53, 0x03, 0x00, 0x00, 0xB0 }, // #1 Sensor  0m grey hub
   { 0x28, 0xF9, 0xCD, 0x53, 0x03, 0x00, 0x00, 0x80 }, // #2 Sensor 15m white hub
@@ -205,7 +205,7 @@ void isCall() {
   char eol = '\0';
   char* number = &eol;
   byte len, ring = 0;
-  bool allow = true;
+  bool allow;
 
   timeout = millis() + REPORT_INTERVAL; 
   do {
@@ -237,6 +237,7 @@ void isCall() {
     delay(5000);
     performModem("ATH", GSM_OK, 1, 1);
     for (byte i = 0; i < USERS_COUNT; i++ ) {
+      allow = true;
       for (byte j = 1; j < 11; j++) {
         allow = allow && number[j] == comrade[i][j+1];
       }
