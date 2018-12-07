@@ -11,14 +11,13 @@
 #define CTRL_Z '\x1A'
 #define ESCAPE '\x1B'
 #define BUFF_SIZE 64
-#define REPORT_INTERVAL 30000L
+#define REPORT_INTERVAL 60000L
 #define MEASURE_INTERVAL 3600000L
-#define MESSAGE_INTERVAL 86400000L
 #define DEVICE_COUNT 4
 #define USERS_COUNT 3
 #define MODEM_RATE 115200L
 
-const char* comrade[USERS_COUNT] = {"+7ХХХХХХХХХХ", "+7ХХХХХХХХХХ", "+7ХХХХХХХХХХ"};
+const char* comrade[USERS_COUNT] = {"+7XXXXXXXXXX", "+7XXXXXXXXXX", "+7XXXXXXXXXX"};
 const byte deviceAddress[DEVICE_COUNT][8]  = {
   { 0x28, 0x6C, 0x8F, 0x53, 0x03, 0x00, 0x00, 0xB0 }, // #1 Sensor  0m grey hub
   { 0x28, 0xF9, 0xCD, 0x53, 0x03, 0x00, 0x00, 0x80 }, // #2 Sensor 15m white hub
@@ -28,7 +27,7 @@ const byte deviceAddress[DEVICE_COUNT][8]  = {
 const int temp_null = 1598;  // (int) 99,9 * 16
 int currentTemperature[DEVICE_COUNT];
 int hourlyTemperature[DEVICE_COUNT][24];
-unsigned long measureTime, messageTime, timeout;
+unsigned long measureTime, timeout;
 char creg1 = '?', creg2 = '?', creg3 = '?';
 char buff[BUFF_SIZE];
 char answer[DEVICE_COUNT+1][23];
@@ -86,7 +85,6 @@ void getTemp() {
       } 
     } 
   }
-  
   lcd.clear();
   byte row = 1;
   byte countDev = 0;
@@ -206,17 +204,19 @@ void isCall() {
   // +CLCC: 1,1,4,0,0,"7XXXXXXXXXX",145
   char eol = '\0';
   char* number = &eol;
-  byte len;
-  bool allow, first = true;
+  byte len, ring = 0;
+  bool allow = true;
 
   timeout = millis() + REPORT_INTERVAL; 
   do {
     if (Serial.available()) {
       len = Serial.readBytesUntil('\n', buff, BUFF_SIZE);
-      if (first && len > 3 && buff[0] == 'R' && buff[1] == 'I' && buff[2] == 'N' && buff[3] == 'G') {
-        Serial.write("AT+CLCC"); 
-        Serial.write(GSM_CR);
-        first = false;
+      if (len > 3 && buff[0] == 'R' && buff[1] == 'I' && buff[2] == 'N' && buff[3] == 'G') {
+        ring++;
+        if (ring == 2) {
+          Serial.write("AT+CLCC"); 
+          Serial.write(GSM_CR);
+        }
       } else if (len > 19 && buff[1] == 'C' && buff[2] == 'L' && buff[3] == 'I' && buff[4] == 'P') {
         buff[19] = '\0';
         number = &buff[8];
@@ -237,7 +237,6 @@ void isCall() {
     delay(5000);
     performModem("ATH", GSM_OK, 1, 1);
     for (byte i = 0; i < USERS_COUNT; i++ ) {
-      allow = true;
       for (byte j = 1; j < 11; j++) {
         allow = allow && number[j] == comrade[i][j+1];
       }
@@ -253,7 +252,6 @@ void isCall() {
         } else {
           Serial.write(ESCAPE); 
         }
-        Serial.write(GSM_CR); 
         Serial.write(GSM_CR); 
         delay(5000);
         break;
@@ -286,7 +284,6 @@ void setup(void)
   }
   connectModem();
   measureTime = millis();
-  messageTime = millis();
 }
 
 void loop(void) { 
@@ -317,21 +314,6 @@ void loop(void) {
       hourlyTemperature[s][0] = currentTemperature[s];
      }
     measureTime += MEASURE_INTERVAL;
-  }
-
-  if (millis() > messageTime) {
-    if (performModem("AT+CMGS=\"+7ХХХХХХХХХХ\"", GSM_SM, 1, 1)) {
-      for (byte i = 0; i <= connected; i++ ) {
-        Serial.write(answer[i]); 
-      }
-      Serial.write(CTRL_Z); 
-    } else {
-      Serial.write(ESCAPE); 
-    }
-    Serial.write(GSM_CR); 
-    Serial.write(GSM_CR); 
-    delay(3000);
-    messageTime += MESSAGE_INTERVAL;
   }
 
 }
