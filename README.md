@@ -71,7 +71,11 @@ https://www.pjrc.com/teensy/td_libs_OneWire.html и LCDi2cW https://github.com/j
 Питание каждой из плат, и Arduino и A6 GSM/GPRS, осуществляется от адаптера AC/DC ~220V/=12V 1А
 https://ru.aliexpress.com/item/DC-12/32893669453.html с последующим понижением напряжения питания до 8 вольт для Arduino и до 6 вольт для A6 GSM/GPRS стабилизаторами напряжения L7808CV и L7806CV соответственно.
 
-## Подсоединение датчиков
+## Подсоединение датчиков DS18B20
+
+Назначение выводов цифрового измерителя температуры DS18B20
+
+![interior installation](images/dallas18b20.jpg)
 
 Датчики подсоединяем к SMS-термометру телефонным 4-х жильным кабелем. 
 
