@@ -12,7 +12,7 @@ https://www.pjrc.com/teensy/td_libs_OneWire.html и LCDi2cW https://github.com/j
 ## Схема электрическая принципиальная
 Выводы U_TXD и U_RXD платы AI-Thinker A6 GSM module соединяем с выводами аппаратной последовательной шины Arduino Uno, контакты Digital 0 (RX) и Digital 1 (TX).
 
-N.B. В Arduino Uno порт USB подключён к той же последовательной шины что и контакты  Digital 0 (RX) и Digital 1 (TX), поэтому ** строго требуется отключать контакты  Digital 0 и Digital 1 перед записью кода через порт USB **.
+N.B. В Arduino Uno порт USB подключён к той же последовательной шины что и контакты  Digital 0 (RX) и Digital 1 (TX), поэтому **строго требуется отключать контакты  Digital 0 и Digital 1 перед записью кода через порт USB**.
 
 ![electric schematic diagram](images/scheme1.jpg)
 
