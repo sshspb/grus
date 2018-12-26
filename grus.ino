@@ -11,9 +11,9 @@
 #define CTRL_Z '\x1A'
 #define ESCAPE '\x1B'
 #define BUFF_SIZE 64
-#define REPORT_INTERVAL 60000L
+#define REPORT_INTERVAL 10000L
 #define MEASURE_INTERVAL 14400000L
-#define SENSORS_COUNT 5
+#define SENSORS_COUNT 6
 #define USERS_COUNT 5
 #define MODEM_RATE 115200L
 
@@ -24,7 +24,8 @@ const byte deviceAddress[DEVICE_COUNT][8]  = {
   { 0x28, 0xF9, 0xCD, 0x53, 0x03, 0x00, 0x00, 0x80 }, // #2 Sensor black 15m white hub
   { 0x28, 0x42, 0x9E, 0x53, 0x03, 0x00, 0x00, 0xA4 }, // #3 Sensor white 10m
   { 0x28, 0xDA, 0xAF, 0x53, 0x03, 0x00, 0x00, 0xFD }, // #4 Sensor black  5m
-  { 0x28, 0xC2, 0x9A, 0x53, 0x03, 0x00, 0x00, 0x51 }  // #5 Sensor white 10m
+  { 0x28, 0xC2, 0x9A, 0x53, 0x03, 0x00, 0x00, 0x51 }, // #5 Sensor white 10m
+  { 0x28, 0x27, 0x84, 0x53, 0x03, 0x00, 0x00, 0x4D }  // #6 Sensor black  5m
 };
 */
 const unsigned int temp_null = 1584;  // (int) 99 * 16  = 0x063E
@@ -32,19 +33,33 @@ const unsigned int temp_null = 1584;  // (int) 99 * 16  = 0x063E
 // int sensors [6] текущая температура
 // int sensors [7] два младших байта серийного номера датчика
 unsigned int sensors[SENSORS_COUNT][8]  = {
-  { 1584, 1584, 1584, 1584, 1584, 1584, 1584, 36716}, // #1 { 0x6C, 0x8F } Sensor 0m grey hub
-  { 1584, 1584, 1584, 1584, 1584, 1584, 1584, 52729}, // #2 { 0xF9, 0xCD } Sensor black 15m white hub
-  { 1584, 1584, 1584, 1584, 1584, 1584, 1584, 40514}, // #3 { 0x42, 0x9E } Sensor white 10m
-  { 1584, 1584, 1584, 1584, 1584, 1584, 1584, 45018}, // #4 { 0xDA, 0xAF } Sensor black  5m
-  { 1584, 1584, 1584, 1584, 1584, 1584, 1584, 39618}  // #5 { 0xC2, 0x9A } Sensor white 10m
+  { 1584, 1584, 1584, 1584, 1584, 1584, 1584, 36716 }, // #1 { 0x6C, 0x8F } Sensor 0m grey hub
+  { 1584, 1584, 1584, 1584, 1584, 1584, 1584, 52729 }, // #2 { 0xF9, 0xCD } Sensor black 15m white hub
+  { 1584, 1584, 1584, 1584, 1584, 1584, 1584, 40514 }, // #3 { 0x42, 0x9E } Sensor white 10m
+  { 1584, 1584, 1584, 1584, 1584, 1584, 1584, 45018 }, // #4 { 0xDA, 0xAF } Sensor black  5m
+  { 1584, 1584, 1584, 1584, 1584, 1584, 1584, 39618 }, // #5 { 0xC2, 0x9A } Sensor white 10m
+  { 1584, 1584, 1584, 1584, 1584, 1584, 1584, 33831 }  // #6 { 0x27, 0x84 } Sensor black  5m
 };
 unsigned long measureTime, timeout;
-bool isEven = true;
+bool isEven = true, lcdready = false;
 byte connected = 0;
 char strCSQ[32];
 
 OneWire ds(ONE_WIRE_UNO);
 LCDi2cW lcd = LCDi2cW(4,20,0x4C,0);
+
+void lcdprint(char* str, byte row, byte col) {
+  if (digitalRead(PWR_KEY_UNO)) {
+    lcdready = false;
+  } else {
+    if (!lcdready) {
+      lcd.init();
+      lcdready = true;
+    } 
+    lcd.setCursor(row, col);
+    lcd.print(str);
+  }
+}
 
 void getSignalQuality (bool sms) {
   char buff[BUFF_SIZE];
@@ -58,6 +73,9 @@ void getSignalQuality (bool sms) {
   timeout = millis() + 1000L;
   do {
     if (Serial.available()) {
+      for (byte j = 0; j < BUFF_SIZE; j++) {
+        buff[j] = '\0';
+      }
       byte len = Serial.readBytesUntil('\n', buff, BUFF_SIZE);
       if (len > 8 && buff[0] == '+' && buff[1] == 'C' && buff[2] == 'S' && buff[3] == 'Q') {
         isResponse = true;
@@ -69,8 +87,7 @@ void getSignalQuality (bool sms) {
   if (sms) {
     Serial.write(strCSQ);
   } else {
-    lcd.setCursor(0, 0);
-    lcd.print(strCSQ);
+    lcdprint(strCSQ, 0, 0);
   }
 }
 
@@ -89,7 +106,8 @@ void getTemp(bool sms) {
   ds.write(0xCC); // Command Skip ROM to address all devices
 	ds.write(0x44); // Command Convert T, Initiates temperature conversion
   delay(1000);    // maybe 750ms is enough, maybe not
-  if (!sms) lcd.clear();
+  lcdready = false;
+
   ds.reset_search();
   while (ds.search(addr)) {
     if (OneWire::crc8(addr, 7) == addr[7]) {
@@ -146,8 +164,7 @@ void getTemp(bool sms) {
         // если больше трёх датчиков подключено отображаем
         // поочерёдно первые три датчика / последние три
         if (++countDev > firstDev && row < 4) {
-          lcd.setCursor(row++, 0);
-          lcd.print(str);
+          lcdprint(str, row++, 0);
         }
       }
     }
@@ -178,6 +195,9 @@ bool performModem(const char* command, byte mode, byte retry, byte waitok) {
     timeout = millis() + 2000L; // ждём ответа 2 сек
     do {
       if (Serial.available()) {
+        for (byte j = 0; j < BUFF_SIZE; j++) {
+          buff[j] = '\0';
+        }
         byte len = Serial.readBytesUntil('\n', buff, BUFF_SIZE);
         if (len > 1) {
           switch (mode) {
@@ -194,8 +214,6 @@ bool performModem(const char* command, byte mode, byte retry, byte waitok) {
                 creg2 = buff[9]; 
                 creg3 = (len > 10 && buff[10] > 32) ? buff[10] : ' ';
                 resOK = resOK || (creg1 == '1' && creg2 == '1' && creg3 == ' ');
-                lcd.setCursor(0,17); lcd.print(creg2);
-                lcd.setCursor(0,18); lcd.print(creg3);
               }
               break;
             default:
@@ -213,34 +231,27 @@ bool performModem(const char* command, byte mode, byte retry, byte waitok) {
 void connectModem() {
   char str[32];
   digitalWrite(PWR_LED_UNO, HIGH);
-  delay(15000); 
-  lcd.clear(); 
-  lcd.setCursor(0,0);
-  sprintf(str, "sample %ld", MODEM_RATE);
-  lcd.print(str);
+  lcdprint("Hello World!\0", 0, 0);
+  delay(10000); 
 
   Serial.begin(MODEM_RATE);
-  delay(5000);
+  delay(1000);
 
-  lcd.setCursor(1,0);
-  lcd.print(F("connection"));
+  lcdprint("connection\0", 1, 0);
   while (!performModem("AT", GSM_OK, 20, 5)) {} 
   performModem("AT&F", GSM_OK, 1, 1);           
   while (!performModem("AT", GSM_OK, 20, 5)) {} 
  
-  lcd.setCursor(2,0);
-  lcd.print(F("registration"));
-//  Serial.write("AT+COPS=4,2,\"25002\""); Serial.write(GSM_CR); delay(5000);
+  lcdprint("registration\0", 2, 0);
   while (!performModem("AT+CREG?", GSM_RG, 1, 1)) {} 
 
-  lcd.setCursor(3,0);
-  lcd.print(F("initial setup"));
+  lcdprint("initial setup\0", 3, 0);
   while (!performModem("ATE0", GSM_OK, 1, 1)) {}            // Set echo mode off 
   while (!performModem("AT+CLIP=1", GSM_OK, 1, 1)) {}       // Set caller ID on
   while (!performModem("AT+CMGF=1", GSM_OK, 1, 1)) {}       // Set SMS to text mode
   while (!performModem("AT+CSCS=\"GSM\"", GSM_OK, 1, 1)) {} // Character set of the mobile equipment
-  lcd.setCursor(3,17);
-  lcd.print(F("OK"));
+  lcdprint("OK\0", 3, 17);
+  digitalWrite(PWR_LED_UNO, LOW);
 }
 
 void isCall() {
@@ -260,6 +271,9 @@ void isCall() {
   timeout = millis() + REPORT_INTERVAL; 
   do {
     if (Serial.available()) {
+      for (byte j = 0; j < BUFF_SIZE; j++) {
+        buff[j] = '\0';
+      }
       len = Serial.readBytesUntil('\n', buff, BUFF_SIZE);
       if (len > 3 && buff[0] == 'R' && buff[1] == 'I' && buff[2] == 'N' && buff[3] == 'G') {
         ring++;
@@ -270,14 +284,10 @@ void isCall() {
       } else if (len > 19 && buff[1] == 'C' && buff[2] == 'L' && buff[3] == 'I' && buff[4] == 'P') {
         buff[19] = '\0';
         number = &buff[8];
-        lcd.setCursor(0,0); lcd.print(' ');
-        lcd.setCursor(0,1); lcd.print(number);
         break;
       } else if (len > 29 && buff[1] == 'C' && buff[2] == 'L' && buff[3] == 'C' && buff[4] == 'C') {
         buff[29] = '\0';
         number = &buff[18];
-        lcd.setCursor(1,0); lcd.print(' ');
-        lcd.setCursor(1,1); lcd.print(number);
         break;
       }
     }
@@ -292,7 +302,6 @@ void isCall() {
         allow = allow && number[j] == comrade[i][j+1];
       }
       if (allow) {
-        lcd.setCursor(2,0); lcd.print(comrade[i]);
         delay(5000);
         sprintf(str, "AT+CMGS=\"%s\"", comrade[i]);
         if (performModem(str, GSM_SM, 1, 1)) {
@@ -304,6 +313,8 @@ void isCall() {
         }
         Serial.write(GSM_CR); 
         delay(5000);
+        // удалить все СМС
+        performModem("AT+CMGD=1,4", GSM_OK, 1, 1);
         break;
       }
     }
@@ -315,18 +326,9 @@ void isCall() {
 
 void setup(void)
 {
-  lcd.init();
-  lcd.setCursor(0,0);
-  lcd.print(F("Hello World!"));
-  strCSQ[0] = '\0';
-  // индикатор что под правым тумблером
-  pinMode(PWR_LED_UNO, OUTPUT); 
-  digitalWrite(PWR_LED_UNO, LOW);
-  // ждём включения правого тумблера по INPUT_PULLUP pin PWR_KEY_UNO значению LOW
   pinMode(PWR_KEY_UNO, INPUT_PULLUP);
-  while (digitalRead(PWR_KEY_UNO)) {
-    delay(100);
-  }
+  pinMode(PWR_LED_UNO, OUTPUT); 
+  strCSQ[0] = '\0';
   connectModem();
   measureTime = millis();
 }
@@ -335,7 +337,7 @@ void loop(void) {
 
   isCall(); // timeout REPORT_INTERVAL
   
-  digitalWrite(PWR_LED_UNO, LOW);
+  digitalWrite(PWR_LED_UNO, HIGH);
   // замер температуры и формирование отчёта answer
   getTemp(false); // timeout 1 с
   // проверка модема
@@ -343,7 +345,7 @@ void loop(void) {
     connectModem(); 
   } 
   if (connected < 4 || !isEven) getSignalQuality(false);
-  if (!digitalRead(PWR_KEY_UNO)) digitalWrite(PWR_LED_UNO, HIGH);
+  digitalWrite(PWR_LED_UNO, LOW);
 
   if (millis() > measureTime) {
     // проверка регистрации в сети Мегафона
