@@ -17,7 +17,7 @@
 #define USERS_COUNT 5
 #define MODEM_RATE 115200L
 
-const char* comrade[USERS_COUNT] = {"+7XXXXXXXXXX", "+7XXXXXXXXXX", "+7XXXXXXXXXX", "+7XXXXXXXXXX", "+7XXXXXXXXXX"};
+const char* comrade[USERS_COUNT] = {"+79219258698", "+79214201935", "+79213303129", "+79213320218", "+79214060453"};
 /*
 const byte deviceAddress[DEVICE_COUNT][8]  = {
   { 0x28, 0x6C, 0x8F, 0x53, 0x03, 0x00, 0x00, 0xB0 }, // #1 Sensor 0m grey hub
@@ -40,7 +40,7 @@ unsigned int sensors[SENSORS_COUNT][8]  = {
   { 1584, 1584, 1584, 1584, 1584, 1584, 1584, 39618 }, // #5 { 0xC2, 0x9A } Sensor white 10m
   { 1584, 1584, 1584, 1584, 1584, 1584, 1584, 33831 }  // #6 { 0x27, 0x84 } Sensor black  5m
 };
-unsigned long measureTime, timeout;
+unsigned long measureTime;
 bool isEven = true, lcdready = false;
 byte connected = 0;
 char strCSQ[32];
@@ -48,7 +48,7 @@ char strCSQ[32];
 OneWire ds(ONE_WIRE_UNO);
 LCDi2cW lcd = LCDi2cW(4,20,0x4C,0);
 
-void lcdprint(char* str, byte row, byte col) {
+void lcdprint(const char* str, byte row, byte col) {
   if (digitalRead(PWR_KEY_UNO)) {
     lcdready = false;
   } else {
@@ -64,13 +64,14 @@ void lcdprint(char* str, byte row, byte col) {
 void getSignalQuality (bool sms) {
   char buff[BUFF_SIZE];
   bool isResponse = false;
+  unsigned long timeout;
   timeout = millis() + 1000L;
   while (Serial.available() > 0 && millis() < timeout) {
     Serial.read();
   }
   Serial.write("AT+CSQ"); 
   Serial.write(GSM_CR);
-  timeout = millis() + 1000L;
+  timeout = millis() + 2000L;
   do {
     if (Serial.available()) {
       for (byte j = 0; j < BUFF_SIZE; j++) {
@@ -179,11 +180,12 @@ void getTemp(bool sms) {
  * retry   количество запросов
  * waitok  количество подряд верных ответов
  */
-bool performModem(const char* command, byte mode, byte retry, byte waitok) {
+bool performModem(const char* command, byte mode, unsigned long latency, byte retry, byte waitok) {
   char creg1, creg2, creg3;
   char buff[BUFF_SIZE];
   byte countok = 0;
   bool resOK = false;
+  unsigned long timeout;
   timeout = millis() + 1000L;
   while (Serial.available() > 0 && millis() < timeout) {
     Serial.read();
@@ -192,7 +194,7 @@ bool performModem(const char* command, byte mode, byte retry, byte waitok) {
     Serial.write(command); 
     Serial.write(GSM_CR);
     resOK = false;
-    timeout = millis() + 2000L; // ждём ответа 2 сек
+    timeout = millis() + latency;
     do {
       if (Serial.available()) {
         for (byte j = 0; j < BUFF_SIZE; j++) {
@@ -231,26 +233,26 @@ bool performModem(const char* command, byte mode, byte retry, byte waitok) {
 void connectModem() {
   char str[32];
   digitalWrite(PWR_LED_UNO, HIGH);
-  lcdprint("Hello World!\0", 0, 0);
+  lcdprint("Hello World!", 0, 0);
   delay(10000); 
 
   Serial.begin(MODEM_RATE);
   delay(1000);
 
-  lcdprint("connection\0", 1, 0);
-  while (!performModem("AT", GSM_OK, 20, 5)) {} 
-  performModem("AT&F", GSM_OK, 1, 1);           
-  while (!performModem("AT", GSM_OK, 20, 5)) {} 
+  lcdprint("connection", 1, 0);
+  while (!performModem("AT", GSM_OK, 2000L, 20, 5)) {} 
+  performModem("AT&F", GSM_OK, 2000L, 1, 1);           
+  while (!performModem("AT", GSM_OK, 2000L, 20, 5)) {} 
  
-  lcdprint("registration\0", 2, 0);
-  while (!performModem("AT+CREG?", GSM_RG, 1, 1)) {} 
+  lcdprint("registration", 2, 0);
+  while (!performModem("AT+CREG?", GSM_RG, 2000L, 1, 1)) {} 
 
-  lcdprint("initial setup\0", 3, 0);
-  while (!performModem("ATE0", GSM_OK, 1, 1)) {}            // Set echo mode off 
-  while (!performModem("AT+CLIP=1", GSM_OK, 1, 1)) {}       // Set caller ID on
-  while (!performModem("AT+CMGF=1", GSM_OK, 1, 1)) {}       // Set SMS to text mode
-  while (!performModem("AT+CSCS=\"GSM\"", GSM_OK, 1, 1)) {} // Character set of the mobile equipment
-  lcdprint("OK\0", 3, 17);
+  lcdprint("initial setup", 3, 0);
+  while (!performModem("ATE0", GSM_OK, 2000L, 1, 1)) {}            // Set echo mode off 
+  while (!performModem("AT+CLIP=1", GSM_OK, 2000L, 1, 1)) {}       // Set caller ID on
+  while (!performModem("AT+CMGF=1", GSM_OK, 2000L, 1, 1)) {}       // Set SMS to text mode
+  while (!performModem("AT+CSCS=\"GSM\"", GSM_OK, 2000L, 1, 1)) {} // Character set of the mobile equipment
+  lcdprint("OK", 3, 17);
   digitalWrite(PWR_LED_UNO, LOW);
 }
 
@@ -267,8 +269,8 @@ void isCall() {
   char* number = &eol;
   byte len, ring = 0;
   bool allow;
+  unsigned long timeout = millis() + REPORT_INTERVAL; 
 
-  timeout = millis() + REPORT_INTERVAL; 
   do {
     if (Serial.available()) {
       for (byte j = 0; j < BUFF_SIZE; j++) {
@@ -294,27 +296,32 @@ void isCall() {
   } while (millis() < timeout);
 
   if (number[0] != '\0') {
-    delay(5000);
-    performModem("ATH", GSM_OK, 1, 1);
+    delay(7000);
+    performModem("ATH", GSM_OK, 2000L, 2, 1);
     for (byte i = 0; i < USERS_COUNT; i++ ) {
       allow = true;
       for (byte j = 1; j < 11; j++) {
         allow = allow && number[j] == comrade[i][j+1];
       }
       if (allow) {
-        delay(5000);
+        delay(7000);
         sprintf(str, "AT+CMGS=\"%s\"", comrade[i]);
-        if (performModem(str, GSM_SM, 1, 1)) {
+        if (performModem(str, GSM_SM, 7000L, 2, 1)) {
+          delay(200);
           Serial.write(strCSQ); 
+          delay(200);
           getTemp(true);
+          delay(200);
           Serial.write(CTRL_Z); 
         } else {
           Serial.write(ESCAPE); 
         }
         Serial.write(GSM_CR); 
+        delay(200);
+        Serial.write(GSM_CR); 
         delay(5000);
         // удалить все СМС
-        performModem("AT+CMGD=1,4", GSM_OK, 1, 1);
+        performModem("AT+CMGD=1,4", GSM_OK, 2000L, 1, 1);
         break;
       }
     }
@@ -335,21 +342,22 @@ void setup(void)
 
 void loop(void) { 
 
-  isCall(); // timeout REPORT_INTERVAL
+  isCall(); // latency REPORT_INTERVAL
   
   digitalWrite(PWR_LED_UNO, HIGH);
   // замер температуры и формирование отчёта answer
-  getTemp(false); // timeout 1 с
+  getTemp(false); // latency 1 с
   // проверка модема
-  if (!performModem("AT", GSM_OK, 1, 1)) {
+  if (!performModem("AT", GSM_OK, 2000L, 1, 1)) {
     connectModem(); 
   } 
   if (connected < 4 || !isEven) getSignalQuality(false);
   digitalWrite(PWR_LED_UNO, LOW);
 
   if (millis() > measureTime) {
+    measureTime += MEASURE_INTERVAL;
     // проверка регистрации в сети Мегафона
-    if (!performModem("AT+CREG?", GSM_RG, 1, 1)) {
+    if (!performModem("AT+CREG?", GSM_RG, 2000L, 1, 1)) {
       connectModem(); 
     } 
     for (byte s = 0; s < SENSORS_COUNT; s++) {
@@ -359,8 +367,32 @@ void loop(void) {
       }
       // в шестой интервал вносим текущую температуру
       sensors[s][5] = sensors[s][6];
-     }
-    measureTime += MEASURE_INTERVAL;
+    }
   }
 
 }
+
+/*    
+    // информацию отправить на сервер
+    lcdprint("AT+CGATT=1", 0, 0);
+    performModem("AT+CGATT=1", GSM_OK, 20000L, 2, 1);
+    lcdprint("AT+CGDCONT=1", 1, 0);
+    performModem("AT+CGDCONT=1,\"IP\",\"internet\"", GSM_OK, 20000L, 2, 1);
+    lcdprint("AT+CGACT=1", 2, 0);
+    performModem("AT+CGACT=1,1", GSM_OK, 20000L, 2, 1);
+    lcdprint("AT+CIPSTART", 3, 0);
+    performModem("AT+CIPSTART=\"TCP\",\"109.236.103.6\",8888", GSM_OK, 20000L, 2, 1);
+    lcdprint("AT+CIPSEND", 0, 0);
+    performModem("AT+CIPSEND", GSM_SM, 20000L, 2, 1);
+    delay(200);
+    Serial.write(strCSQ); 
+    delay(200);
+    getTemp(true);
+    delay(200);
+    Serial.write(CTRL_Z); 
+    delay(10000);
+    lcdprint("AT+CGACT=0,1", 1, 0);
+    performModem("AT+CGACT=0,1", GSM_OK, 20000L, 2, 1);
+    lcdprint("AT+CGATT=0", 2, 0);
+    performModem("AT+CGATT=0", GSM_OK, 20000L, 2, 1);
+*/
