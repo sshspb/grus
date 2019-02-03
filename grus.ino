@@ -17,7 +17,7 @@
 #define USERS_COUNT 5
 #define MODEM_RATE 115200L
 
-const char* comrade[USERS_COUNT] = {"+79219258698", "+79214201935", "+79213303129", "+79213320218", "+79214060453"};
+const char* comrade[USERS_COUNT] = {"+7XXXXXXXXXX", "+7XXXXXXXXXX", "+7XXXXXXXXXX", "+7XXXXXXXXXX", "+7XXXXXXXXXX"};
 /*
 const byte deviceAddress[DEVICE_COUNT][8]  = {
   { 0x28, 0x6C, 0x8F, 0x53, 0x03, 0x00, 0x00, 0xB0 }, // #1 Sensor 0m grey hub
